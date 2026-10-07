@@ -47,6 +47,25 @@
     if (n) sock.emit('nick', n);
     send();
   });
+  // game.js - Ses Efekti Üreteci (Web Audio API)
+  const playGoalSound = () => {
+    try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.1 + 0.25);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + i * 0.1);
+      osc.stop(ctx.currentTime + i * 0.1 + 0.25);
+    });
+    } catch (e) { /* AudioContext kısıtlamalarını yoksay */ }
+  };
 
   sock.on('r', a => {
     roster = new Map(a.map(([id, n, t]) => [id, { n, t }]));
@@ -87,20 +106,23 @@
     $('sub').textContent = d.ot ? 'ALTIN GOL' : 'İLK ' + (cfg ? cfg.LIMIT : 5) + ' GOL';
 
     const key = d.ph ? d.ph + '-' + d.w + '-' + d.s.join(':') : '';
+    // game.js - sock.on('s', d => { ... }) içerisinde bannerKey kontrolü:
     if (key !== bannerKey) {
       bannerKey = key;
       const b = $('banner');
       if (!d.ph) b.className = '';
       else {
+        if (d.ph === 1) playGoalSound(); // <-- GOL OLDUĞUNDA SESİ ÇAL
+
         const t = d.ph === 1 ? 'GOL!' : 'MAÇ BİTTİ';
         const s = d.ph === 1 ? TN[d.w] + ' TAKIM SKORU BULDU' : TN[d.w] + ' TAKIM KAZANDI';
-        b.innerHTML = '<div></div><small></small>';
-        b.firstChild.textContent = t;
-        b.lastChild.textContent = s;
-        b.firstChild.style.color = COL[d.w];
-        b.className = 'show';
-      }
-    }
+       b.innerHTML = '<div></div><small></small>';
+       b.firstChild.textContent = t;
+       b.lastChild.textContent = s;
+       b.firstChild.style.color = COL[d.w];
+       b.className = 'show';
+  }
+}
   });
 
   // ---------- Çizim ----------

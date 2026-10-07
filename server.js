@@ -19,7 +19,7 @@ const MAX = 6;                           // takım başı oyuncu
 const LIMIT = 5;                         // gol limiti
 const MATCH_TICKS = 5 * 60 * 60;         // 5 dakika (60 tick/sn)
 const STEP = 1000 / 60;
-const KICK = 5, KICK_RANGE = 4, E = 0.5; // şut gücü, şut menzili, sekme katsayısı
+const KICK = 7, KICK_RANGE = 6, E = 0.5; // şut gücü, şut menzili, sekme katsayısı
 const POSTS = [[0, GY1], [0, GY2], [W, GY1], [W, GY2]];
 const SX = [W / 2 - 110, W / 2 - 210, W / 2 - 210, W / 2 - 330, W / 2 - 330, 110];
 const SY = [H / 2, H / 2 - 110, H / 2 + 110, H / 2 - 200, H / 2 + 200, H / 2];
@@ -114,7 +114,7 @@ function step() {
     let iy = (p.in & 2 ? 1 : 0) - (p.in & 1 ? 1 : 0);
     const l = Math.hypot(ix, iy);
     if (l) { ix /= l; iy /= l; }
-    const a = p.in & 16 ? 0.07 : 0.1;    // şut tuşuna basılıyken ivme düşer
+    const a = p.in & 16 ? 0.12 : 0.18;    // şut tuşuna basılıyken ivme düşer
     p.vx += ix * a; p.vy += iy * a;
   });
 
