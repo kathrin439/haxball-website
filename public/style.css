@@ -1,0 +1,98 @@
+:root {
+  --red: #ff4d4d;
+  --blue: #3d8bff;
+  --gold: #ffe14d;
+  --line: #eaffea;
+  --pitch-dark: #06180d;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background: radial-gradient(ellipse at 50% 40%, #12482a 0%, var(--pitch-dark) 75%);
+  color: var(--line);
+  font-family: 'Chakra Petch', 'Courier New', monospace;
+}
+
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* CRT tarama çizgileri + vinyet */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9; pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, .16) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, .5) 100%);
+}
+
+/* Skor tabelası */
+#hud {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: stretch; z-index: 2;
+  border: 4px solid var(--line); background: #04100a;
+  box-shadow: 6px 6px 0 #000;
+  font-family: 'Press Start 2P', monospace;
+}
+.team { display: flex; align-items: center; gap: 14px; padding: 10px 16px; font-size: 12px; color: #fff; }
+.team b { font-weight: 400; font-size: 28px; min-width: 34px; text-align: center; text-shadow: 3px 3px 0 rgba(0, 0, 0, .45); }
+.team.red { background: var(--red); }
+.team.blue { background: var(--blue); }
+#clock { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 7px; min-width: 160px; padding: 8px 14px; }
+#tm { font-size: 20px; color: var(--gold); text-shadow: 3px 3px 0 #000; }
+#sub { font-family: 'VT323', monospace; font-size: 18px; color: var(--line); opacity: .8; }
+
+/* Gol / maç sonu panosu */
+#banner {
+  position: fixed; left: 50%; top: 44%; z-index: 3; display: none; text-align: center;
+  transform: translate(-50%, -50%); pointer-events: none;
+  font-family: 'Press Start 2P', monospace; text-shadow: 5px 5px 0 #000;
+}
+#banner.show { display: block; animation: pop .45s steps(5) both; }
+#banner div { font-size: clamp(26px, 5vw, 56px); }
+#banner small { display: block; margin-top: 18px; font-size: clamp(10px, 1.6vw, 16px); color: #fff; text-shadow: 3px 3px 0 #000; }
+@keyframes pop {
+  from { transform: translate(-50%, -50%) scale(.3); opacity: 0; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* Alt çubuk: takım listeleri + oyuncu bilgisi */
+#foot {
+  position: fixed; left: 0; right: 0; bottom: 0; height: 60px; z-index: 2;
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; padding: 0 14px;
+  background: linear-gradient(0deg, rgba(0, 0, 0, .7), transparent);
+}
+.list { list-style: none; display: flex; gap: 8px; overflow: hidden; white-space: nowrap; font-weight: 700; font-size: 14px; }
+.list.blue { justify-content: flex-end; }
+.list li { padding: 3px 9px; background: rgba(0, 0, 0, .55); border-bottom: 3px solid; }
+.list.red li { border-color: var(--red); }
+.list.blue li { border-color: var(--blue); }
+.list li.me { color: var(--gold); }
+
+#mid { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+#role { font-family: 'Press Start 2P', monospace; font-size: 10px; letter-spacing: 1px; text-shadow: 2px 2px 0 #000; }
+#nick {
+  width: 190px; padding: 0 6px; outline: none; text-align: center;
+  background: #000; border: 2px solid var(--line); color: var(--gold);
+  font-family: 'VT323', monospace; font-size: 20px; user-select: text; -webkit-user-select: text;
+}
+#nick:focus { border-color: var(--gold); }
+#hint { font-family: 'VT323', monospace; font-size: 16px; opacity: .75; }
+
+/* Bağlantı koptu katmanı */
+#off {
+  position: fixed; inset: 0; z-index: 8; display: none; align-items: center; justify-content: center; text-align: center;
+  background: rgba(0, 0, 0, .75); padding: 24px; line-height: 1.8;
+  font-family: 'Press Start 2P', monospace; font-size: 14px; color: var(--gold);
+}
+#off.on { display: flex; }
+
+@media (max-width: 760px) {
+  .team { padding: 8px 10px; gap: 8px; font-size: 9px; }
+  .team b { font-size: 20px; min-width: 24px; }
+  #clock { min-width: 110px; }
+  #tm { font-size: 14px; }
+  #hint, .list { display: none; }
+  #foot { grid-template-columns: 1fr; justify-items: center; }
+}

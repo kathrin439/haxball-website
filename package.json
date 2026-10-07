@@ -1,0 +1,17 @@
+{
+  "name": "piksel-futbol",
+  "version": "1.0.0",
+  "description": "HaxBall benzeri gerçek zamanlı 2D çok oyunculu futbol oyunu (Node.js + Socket.io + Canvas)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "license": "MIT"
+}

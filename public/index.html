@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Piksel Futbol</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <header id="hud">
+    <div class="team red"><span>KIRMIZI</span><b id="rs">0</b></div>
+    <div id="clock"><span id="tm">05:00</span><small id="sub">&nbsp;</small></div>
+    <div class="team blue"><b id="bs">0</b><span>MAVİ</span></div>
+  </header>
+
+  <div id="banner"></div>
+
+  <footer id="foot">
+    <ul id="rl" class="list red"></ul>
+    <div id="mid">
+      <div id="role">BAĞLANIYOR…</div>
+      <input id="nick" maxlength="14" placeholder="takma adın" autocomplete="off" spellcheck="false">
+      <div id="hint">WASD / OKLAR: hareket · BOŞLUK / SOL TIK: şut</div>
+    </div>
+    <ul id="bl" class="list blue"></ul>
+  </footer>
+
+  <div id="off">Bağlantı koptu, yeniden bağlanılıyor…</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
