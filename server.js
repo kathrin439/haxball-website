@@ -114,7 +114,7 @@ function step() {
     let iy = (p.in & 2 ? 1 : 0) - (p.in & 1 ? 1 : 0);
     const l = Math.hypot(ix, iy);
     if (l) { ix /= l; iy /= l; }
-    const a = p.in & 16 ? 0.12 : 0.18;    // şut tuşuna basılıyken ivme düşer
+    const a = p.in & 16 ? 0.09 : 0.14;    // şut tuşuna basılıyken ivme düşer
     p.vx += ix * a; p.vy += iy * a;
   });
 
