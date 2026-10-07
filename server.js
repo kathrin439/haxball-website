@@ -14,19 +14,28 @@ const io = new Server(server);
 app.use(express.static(__dirname));
 
 // ---------- Saha ve oyun sabitleri (Huge ölçeğinde 6v6 saha) ----------
-const W = 1200, H = 600;                 // oyun alanı
+const W = 1600, H = 800;                 // oyun alanı
 const GD = 45;                           // kale ağı derinliği
 const GY1 = H / 2 - 110, GY2 = H / 2 + 110; // kale ağzı (220 px)
 const POST = 7;                          // direk yarıçapı
 const PR = 15, BR = 10;                  // oyuncu / top yarıçapı
-const MAX = 6;                           // takım başı oyuncu
+const MAX = 10;                           // takım başı oyuncu
 const LIMIT = 5;                         // gol limiti
 const MATCH_TICKS = 5 * 60 * 60;         // 5 dakika (60 tick/sn)
 const STEP = 1000 / 60;
 const KICK = 7, KICK_RANGE = 6, E = 0.5; // şut gücü, şut menzili, sekme katsayısı
 const POSTS = [[0, GY1], [0, GY2], [W, GY1], [W, GY2]];
-const SX = [W / 2 - 110, W / 2 - 210, W / 2 - 210, W / 2 - 330, W / 2 - 330, 110];
-const SY = [H / 2, H / 2 - 110, H / 2 + 110, H / 2 - 200, H / 2 + 200, H / 2];
+// 10 oyuncu için X ve Y offset dizilimleri (1200x600 saha ölçeğine uygun):
+const SX = [
+  W / 2 - 100, W / 2 - 200, W / 2 - 200, 
+  W / 2 - 320, W / 2 - 320, W / 2 - 320, 
+  W / 2 - 420, W / 2 - 420, W / 2 - 420, 100
+];
+const SY = [
+  H / 2,       H / 2 - 120, H / 2 + 120, 
+  H / 2 - 180, H / 2,       H / 2 + 180, 
+  H / 2 - 220, H / 2,       H / 2 + 220, H / 2
+];
 
 // ---------- Oyun durumu ----------
 const players = new Map();
