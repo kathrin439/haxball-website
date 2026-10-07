@@ -311,7 +311,20 @@
       alert('Hatalı şifre!');
     }
   });
-
+  // game.js - Admin duyuru input'una tuş çakışmasını önleyen dinleyicileri ekleyin
+  const annInput = $('adm-ann-text');
+  if (annInput) {
+  // Klavyedeki WASD, Ok tuşları ve Boşluk tuşunun oyuna gitmesini engeller
+    annInput.addEventListener('keydown', e => e.stopPropagation());
+    annInput.addEventListener('keyup', e => e.stopPropagation());
+  
+  // Enter tuşuna basıldığında duyuruyu direkt göndersin
+     annInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      $('adm-ann-btn').click();
+    }
+  });
+}
   // Admin Buton İşlevleri
   $('adm-reset-ball').onclick = () => sock.emit('admin_cmd', { type: 'reset_ball' });$('adm-reset-time').onclick = () => sock.emit('admin_cmd', { type: 'reset_time' });
   $('adm-score-red').onclick = () => sock.emit('admin_cmd', { type: 'add_score', team: 1 });$('adm-score-blue').onclick = () => sock.emit('admin_cmd', { type: 'add_score', team: 2 });
