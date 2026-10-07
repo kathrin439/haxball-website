@@ -95,4 +95,32 @@ body::after {
   #tm { font-size: 14px; }
   #hint, .list { display: none; }
   #foot { grid-template-columns: 1fr; justify-items: center; }
+  
 }
+/* Admin Modal Stilleri */
+.modal {
+  position: fixed; inset: 0; z-index: 99;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Press Start 2P', monospace;
+}
+.modal-content {
+  background: #06180d; border: 4px solid var(--gold);
+  padding: 20px; width: 360px; color: #fff; position: relative;
+  box-shadow: 0 0 20px rgba(255, 225, 77, 0.3);
+}
+.close-btn { position: absolute; right: 12px; top: 8px; cursor: pointer; color: var(--red); font-size: 20px; }
+.admin-group { margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); pt: 10px; }
+.admin-group h4 { font-size: 10px; color: var(--gold); margin-bottom: 8px; }
+.admin-group button {
+  background: #12482a; border: 2px solid var(--line); color: #fff;
+  padding: 6px 10px; font-family: inherit; font-size: 9px; cursor: pointer; margin: 2px;
+}
+.admin-group button:hover { background: var(--gold); color: #000; }
+#admin-pass {
+  width: 100%; padding: 8px; background: #000; border: 2px solid var(--line);
+  color: var(--gold); font-family: 'VT323', monospace; font-size: 18px; margin-bottom: 10px;
+}
+#admin-player-list { list-style: none; font-size: 10px; max-height: 120px; overflow-y: auto; }
+#admin-player-list li { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; }
+.kick-btn { background: var(--red) !important; color: #fff !important; padding: 2px 6px !important; }

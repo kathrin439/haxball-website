@@ -3,6 +3,7 @@ const path = require('path');
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
+const ADMIN_PASSWORD = "4942894y"; // <-- İstediğin admin şifresini buraya yaz
 
 const app = express();
 const server = http.createServer(app);
@@ -176,6 +177,32 @@ setInterval(() => {
 
 // ---------- Bağlantılar ----------
 io.on('connection', socket => {
+  // Admin Giriş İsteği
+  socket.on('admin_login', pass => {
+    if (pass === ADMIN_PASSWORD) {
+      socket.isAdmin = true;
+      socket.emit('admin_auth', true);
+    } else {
+      socket.emit('admin_auth', false);
+    }
+  });
+
+  // Admin Komutları (Sadece doğrulanan adminler çalıştırabilir)
+  socket.on('admin_cmd', data => {
+    if (!socket.isAdmin) return;
+
+    if (data.type === 'reset_ball') {
+      ball.x = W / 2; ball.y = H / 2; ball.vx = 0; ball.vy = 0;
+    } else if (data.type === 'add_score') {
+      if (data.team === 1) sc[0]++;
+      if (data.team === 2) sc[1]++;
+    } else if (data.type === 'reset_time') {
+      tl = MATCH_TICKS;
+    } else if (data.type === 'kick') {
+      const targetSocket = io.sockets.sockets.get(data.targetId);
+      if (targetSocket) targetSocket.disconnect(true);
+    }
+  });
   const p = {
     id: ++nid, n: 'Oyuncu' + (1000 + Math.floor(Math.random() * 9000)), t: 0, ord: ++ord,
     x: 0, y: 0, vx: 0, vy: 0, r: PR, im: 0.5, d: 0.96, in: 0, lock: false

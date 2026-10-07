@@ -280,4 +280,59 @@
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+  // ---------- Admin Paneli Mantığı ----------
+  let isAdmin = false;
+  const modal = $('admin-modal');
+  const loginSec = $('admin-login-sec');
+  const panelSec = $('admin-panel-sec');
+
+  // Ctrl + Shift + A tuş kombinasyonuyla paneli aç/kapat
+  addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyA') {
+      e.preventDefault();
+      modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+    }
+  });
+
+  $('admin-close').onclick = () => modal.style.display = 'none';
+
+  $('admin-login-btn').onclick = () => {
+    const pass = $('admin-pass').value;
+    sock.emit('admin_login', pass);
+  };
+
+  sock.on('admin_auth', success => {
+    if (success) {
+      isAdmin = true;
+      loginSec.style.display = 'none';
+      panelSec.style.display = 'block';
+      alert('Admin girişi başarılı!');
+    } else {
+      alert('Hatalı şifre!');
+    }
+  });
+
+  // Admin Buton İşlevleri
+  $('adm-reset-ball').onclick = () => sock.emit('admin_cmd', { type: 'reset_ball' });$('adm-reset-time').onclick = () => sock.emit('admin_cmd', { type: 'reset_time' });
+  $('adm-score-red').onclick = () => sock.emit('admin_cmd', { type: 'add_score', team: 1 });$('adm-score-blue').onclick = () => sock.emit('admin_cmd', { type: 'add_score', team: 2 });
+
+  // Kadro güncellendikçe admin panelindeki oyuncu listesini de tazele
+  sock.on('r', a => {
+    if (!isAdmin) return;
+    const ul = $('admin-player-list');
+    ul.innerHTML = '';
+    a.forEach(([id, name]) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${name}</span> <button class="kick-btn" data-id="${id}">At</button>`;
+      ul.appendChild(li);
+    });
+
+    document.querySelectorAll('.kick-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        // ID eşleşmesi için socket id'sini bulup kick komutu yolluyoruz
+        const targetId = e.target.getAttribute('data-id');
+        sock.emit('admin_cmd', { type: 'kick', targetId });
+      };
+    });
+  });
 })();
