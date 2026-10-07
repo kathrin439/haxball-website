@@ -17,6 +17,28 @@
 
   if (document.fonts) ['700 13px "Chakra Petch"', '8px "Press Start 2P"'].forEach(f => document.fonts.load(f));
 
+  // ---------- Ses Efekti Üreteci ----------
+  const playGoalSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctxAud = new AudioCtx();
+      const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+      notes.forEach((freq, i) => {
+        const osc = ctxAud.createOscillator();
+        const gain = ctxAud.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.15, ctxAud.currentTime + i * 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctxAud.currentTime + i * 0.1 + 0.25);
+        osc.connect(gain);
+        gain.connect(ctxAud.destination);
+        osc.start(ctxAud.currentTime + i * 0.1);
+        osc.stop(ctxAud.currentTime + i * 0.1 + 0.25);
+      });
+    } catch (e) { /* AudioContext kısıtlamalarını yoksay */ }
+  };
+
   // ---------- Girdi ----------
   const KEYS = { ArrowUp: 1, KeyW: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 4, KeyA: 4, ArrowRight: 8, KeyD: 8, Space: 16, KeyX: 16 };
   const send = () => {
@@ -29,17 +51,20 @@
   addEventListener('mouseup', e => { if (e.button === 0) { mk = false; send(); } });
   addEventListener('blur', () => { kb = 0; mk = false; send(); });
   addEventListener('contextmenu', e => e.preventDefault());
-  nick.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') nick.blur(); });
-  nick.addEventListener('keyup', e => e.stopPropagation());
-  nick.addEventListener('change', () => {
-    const n = nick.value.trim();
-    if (n) { ls.set('nick', n); sock.emit('nick', n); }
-  });
-  nick.value = ls.get('nick') || '';
+  
+  if (nick) {
+    nick.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') nick.blur(); });
+    nick.addEventListener('keyup', e => e.stopPropagation());
+    nick.addEventListener('change', () => {
+      const n = nick.value.trim();
+      if (n) { ls.set('nick', n); sock.emit('nick', n); }
+    });
+    nick.value = ls.get('nick') || '';
+  }
 
   // ---------- Socket ----------
-  sock.on('connect', () => $('off').classList.remove('on'));
-  sock.on('disconnect', () => { $('off').classList.add('on'); ents.clear(); });
+  sock.on('connect', () => $('off') &&$('off').classList.remove('on'));
+  sock.on('disconnect', () => { $('off') &&$('off').classList.add('on'); ents.clear(); });
   sock.on('init', d => {
     cfg = d; me = d.id; resize();
     sent = 0;
@@ -47,31 +72,13 @@
     if (n) sock.emit('nick', n);
     send();
   });
-  // game.js - Ses Efekti Üreteci (Web Audio API)
-  const playGoalSound = () => {
-    try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
-    notes.forEach((freq, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.1);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.1 + 0.25);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + i * 0.1);
-      osc.stop(ctx.currentTime + i * 0.1 + 0.25);
-    });
-    } catch (e) { /* AudioContext kısıtlamalarını yoksay */ }
-  };
 
   sock.on('r', a => {
     roster = new Map(a.map(([id, n, t]) => [id, { n, t }]));
     for (const id of [...ents.keys()]) { const r = roster.get(id); if (!r || !r.t) ents.delete(id); }
     [1, 2].forEach(t => {
-      const ul = t === 1 ? $('rl') : $('bl');
+      const ul = t === 1 ? $('rl') :$('bl');
+      if (!ul) return;
       ul.textContent = '';
       a.filter(r => r[2] === t).sort((x, y) => x[0] - y[0]).forEach(r => {
         const li = document.createElement('li');
@@ -81,8 +88,29 @@
       });
     });
     const m = roster.get(me), spec = a.filter(r => !r[2]).length, role = $('role');
-    role.textContent = !m ? '' : m.t ? TN[m.t] + ' TAKIMI' : 'İZLEYİCİ MODU' + (spec ? ' (' + spec + ')' : '');
-    role.style.color = m && m.t ? COL[m.t] : '#ffe14d';
+    if (role) {
+      role.textContent = !m ? '' : m.t ? TN[m.t] + ' TAKIMI' : 'İZLEYİCİ MODU' + (spec ? ' (' + spec + ')' : '');
+      role.style.color = m && m.t ? COL[m.t] : '#ffe14d';
+    }
+
+    // Admin panelindeki oyuncu listesi açıksa tazele
+    if (typeof isAdmin !== 'undefined' && isAdmin) {
+      const admUl = $('admin-player-list');
+      if (admUl) {
+        admUl.innerHTML = '';
+        a.forEach(([id, name]) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<span>${name}</span> <button class="kick-btn" data-id="${id}">At</button>`;
+          admUl.appendChild(li);
+        });
+        document.querySelectorAll('.kick-btn').forEach(btn => {
+          btn.onclick = (e) => {
+            const targetId = e.target.getAttribute('data-id');
+            sock.emit('admin_cmd', { type: 'kick', targetId });
+          };
+        });
+      }
+    }
   });
 
   sock.on('k', id => rings.push({ id, t: performance.now() }));
@@ -99,37 +127,114 @@
     ball.tx = d.b[0]; ball.ty = d.b[1];
     if (!ball.ok) { ball.x = ball.tx; ball.y = ball.ty; ball.ok = true; }
 
-    $('rs').textContent = d.s[0];
-    $('bs').textContent = d.s[1];
+    if ($('rs'))$('rs').textContent = d.s[0];
+    if ($('bs'))$('bs').textContent = d.s[1];
     const mm = Math.floor(d.t / 60), ss = d.t % 60;
-    $('tm').textContent = d.ot ? '00:00' : String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
-    $('sub').textContent = d.ot ? 'ALTIN GOL' : 'İLK ' + (cfg ? cfg.LIMIT : 5) + ' GOL';
+    if ($('tm'))$('tm').textContent = d.ot ? '00:00' : String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+    if ($('sub'))$('sub').textContent = d.ot ? 'ALTIN GOL' : 'İLK ' + (cfg ? cfg.LIMIT : 5) + ' GOL';
 
     const key = d.ph ? d.ph + '-' + d.w + '-' + d.s.join(':') + '-' + (d.sc_name || '') : '';
-  if (key !== bannerKey) {
-    bannerKey = key;
-    const b = $('banner');
-    if (!d.ph) b.className = '';
-    else {
-      if (d.ph === 1) playGoalSound();
+    if (key !== bannerKey) {
+      bannerKey = key;
+      const b = $('banner');
+      if (b) {
+        if (!d.ph) b.className = '';
+        else {
+          if (d.ph === 1) playGoalSound();
 
-      // Gol atan kişinin ismi varsa ekliyoruz
-      const scorerText = d.sc_name ? ' (' + d.sc_name + ')' : '';
-      const t = d.ph === 1 ? 'GOL!' + scorerText : 'MAÇ BİTTİ';
-      const s = d.ph === 1 ? TN[d.w] + ' TAKIM SKORU BULDU' : TN[d.w] + ' TAKIM KAZANDI';
-      
-      b.innerHTML = '<div></div><small></small>';
-      b.firstChild.textContent = t;
-      b.lastChild.textContent = s;
-      b.firstChild.style.color = COL[d.w];
-      b.className = 'show';
+          const scorerText = d.sc_name ? ' (' + d.sc_name + ')' : '';
+          const t = d.ph === 1 ? 'GOL!' + scorerText : 'MAÇ BİTTİ';
+          const s = d.ph === 1 ? TN[d.w] + ' TAKIM SKORU BULDU' : TN[d.w] + ' TAKIM KAZANDI';
+
+          b.innerHTML = '<div></div><small></small>';
+          b.firstChild.textContent = t;
+          b.lastChild.textContent = s;
+          b.firstChild.style.color = COL[d.w];
+          b.className = 'show';
+        }
+      }
     }
-  }
-  }
-}
   });
 
-  // ---------- Çizim ----------
+  // ---------- Admin Paneli Tarafı ----------
+  let isAdmin = false;
+  const modal = $('admin-modal');
+  const loginSec = $('admin-login-sec');
+  const panelSec = $('admin-panel-sec');
+
+  addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyA') {
+      e.preventDefault();
+      if (modal) modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
+    }
+  });
+
+  if ($('admin-close'))$('admin-close').onclick = () => modal.style.display = 'none';
+
+  if ($('admin-login-btn')) {$('admin-login-btn').onclick = () => {
+      const pass = $('admin-pass') ?$('admin-pass').value : '';
+      sock.emit('admin_login', pass);
+    };
+  }
+
+  sock.on('admin_auth', success => {
+    if (success) {
+      isAdmin = true;
+      if (loginSec) loginSec.style.display = 'none';
+      if (panelSec) panelSec.style.display = 'block';
+      alert('Admin girişi başarılı!');
+    } else {
+      alert('Hatalı şifre!');
+    }
+  });
+
+  if ($('adm-reset-ball'))$('adm-reset-ball').onclick = () => sock.emit('admin_cmd', { type: 'reset_ball' });
+  if ($('adm-reset-time'))$('adm-reset-time').onclick = () => sock.emit('admin_cmd', { type: 'reset_time' });
+  if ($('adm-score-red'))$('adm-score-red').onclick = () => sock.emit('admin_cmd', { type: 'add_score', team: 1 });
+  if ($('adm-score-blue'))$('adm-score-blue').onclick = () => sock.emit('admin_cmd', { type: 'add_score', team: 2 });
+
+  if ($('adm-ann-btn')) {$('adm-ann-btn').onclick = () => {
+      const msgInput = $('adm-ann-text');
+      if (msgInput && msgInput.value) {
+        sock.emit('admin_cmd', { type: 'announce', msg: msgInput.value });
+        msgInput.value = '';
+      }
+    };
+  }
+
+  // Yazı yazarken tuşların oyuna yayılmasını engelleme
+  ['adm-ann-text', 'admin-pass'].forEach(id => {
+    const el = $(id);
+    if (el) {
+      el.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          if (id === 'adm-ann-text' && $('adm-ann-btn'))$('adm-ann-btn').click();
+          if (id === 'admin-pass' && $('admin-login-btn'))$('admin-login-btn').click();
+        }
+      });
+      el.addEventListener('keyup', e => e.stopPropagation());
+    }
+  });
+
+  sock.on('announcement', msg => {
+    const b = $('banner');
+    if (b) {
+      b.innerHTML = '<div>DUYURU</div><small></small>';
+      b.firstChild.textContent = 'DUYURU';
+      b.firstChild.style.color = '#ffe14d';
+      b.lastChild.textContent = msg;
+      b.className = 'show';
+
+      setTimeout(() => {
+        if (b.firstChild && b.firstChild.textContent === 'DUYURU') {
+          b.className = '';
+        }
+      }, 4000);
+    }
+  });
+
+  // ---------- Çizim ve Döngü ----------
   function resize() {
     dpr = window.devicePixelRatio || 1; vw = innerWidth; vh = innerHeight;
     cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
@@ -143,14 +248,12 @@
 
   const circ = (x, y, r) => { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); };
 
-  // Sol yarı saha öğeleri; sağ taraf yansıtılarak çizilir
   function side(c) {
     const { W, H, GD, GY1, GY2, POST } = cfg;
     ctx.save();
     if (c === 2) { ctx.translate(W, 0); ctx.scale(-1, 1); }
     const col = COL[c];
 
-    // kale ağı
     ctx.fillStyle = 'rgba(255,255,255,.14)';
     ctx.fillRect(-GD, GY1, GD, GY2 - GY1);
     ctx.save();
@@ -160,12 +263,10 @@
     for (let y = GY1; y <= GY2; y += 9) { ctx.moveTo(-GD, y); ctx.lineTo(0, y); }
     ctx.stroke(); ctx.restore();
 
-    // kale çerçevesi
     ctx.strokeStyle = col; ctx.lineWidth = 5; ctx.beginPath();
     ctx.moveTo(0, GY1); ctx.lineTo(-GD, GY1); ctx.lineTo(-GD, GY2); ctx.lineTo(0, GY2);
     ctx.stroke();
 
-    // ceza sahası, altı pas, penaltı noktası ve yayı, köşe yayları
     ctx.strokeStyle = LINE; ctx.lineWidth = 3;
     ctx.strokeRect(0, H / 2 - 220, 190, 440);
     ctx.strokeRect(0, H / 2 - 150, 70, 300);
@@ -174,7 +275,6 @@
     ctx.beginPath(); ctx.arc(0, H, 22, -Math.PI / 2, 0); ctx.stroke();
     ctx.fillStyle = LINE; circ(130, H / 2, 4); ctx.fill();
 
-    // direkler
     for (const y of [GY1, GY2]) {
       circ(0, y, POST); ctx.fillStyle = col; ctx.fill();
       ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
@@ -284,6 +384,7 @@
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+})();
   // ---------- Admin Paneli Mantığı ----------
   let isAdmin = false;
   const modal = $('admin-modal');
@@ -396,4 +497,4 @@
       };
     });
   });
-})();
+

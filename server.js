@@ -39,7 +39,7 @@ const SY = [
 
 // ---------- Oyun durumu ----------
 const players = new Map();
-const ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, im: 1, d: 0.99 lastTouch: null };
+const ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, im: 1, d: 0.99, lastTouch: null };
 let nid = 0, ord = 0, cnt = [0, 0, 0];
 let sc = [0, 0], tl = MATCH_TICKS, ot = false;
 let ph = 0, pt = 0, winner = 0, scorer = '';        // ph: 0 oyun, 1 gol, 2 maç sonu
@@ -106,7 +106,7 @@ function collide(a, b) {
   const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy), min = a.r + b.r;
   if (dist >= min || dist === 0) return;
 
-  // Eğer oyuncu topa temas ettiyse son dokunanı kaydet
+  // Eğer çarpışan nesnelerden biri oyuncu (a.n var) ve diğeri top ise son dokunanı kaydet
   if (a.n && b === ball) ball.lastTouch = a.n;
 
   const nx = dx / dist, ny = dy / dist, im = a.im + b.im, o = min - dist;
@@ -152,6 +152,7 @@ function step() {
         if (d > 0 && d < PR + BR + KICK_RANGE) {
           ball.vx += dx / d * KICK; ball.vy += dy / d * KICK;
           p.lock = true;
+          ball.lastTouch = p.n; // Şut atan oyuncuyu kaydet
           io.emit('k', p.id);
         }
       }
@@ -165,15 +166,25 @@ function step() {
   act.forEach(bounds);
   bounds(ball);
 
-  if (ph === 0) {
-  const g = ball.x < 0 ? 2 : ball.x > W ? 1 : 0;
-  if (g) {
-    sc[g - 1]++; winner = g;
-    scorer = ball.lastTouch || ''; // Golü atanın ismini al
-    if (ot || sc[g - 1] >= LIMIT) endMatch(); else { ph = 1; pt = 150; }
+ if (ph === 0) {
+    if (!ot && --tl <= 0) {
+      tl = 0;
+      if (sc[0] !== sc[1]) endMatch(); else ot = true;
+    }
+    if (ph === 0) {
+      const g = ball.x < 0 ? 2 : ball.x > W ? 1 : 0;
+      if (g) {
+        sc[g - 1]++; winner = g;
+        scorer = ball.lastTouch || ''; // Gol atanın ismini al
+        if (ot || sc[g - 1] >= LIMIT) endMatch(); else { ph = 1; pt = 150; }
+      }
+    }
+  } else if (--pt <= 0) {
+    if (ph === 2) { sc = [0, 0]; tl = MATCH_TICKS; ot = false; }
+    ph = 0; kickoff();
   }
 }
-}
+
 
 const r1 = v => Math.round(v * 10) / 10;
 function snapshot() {
