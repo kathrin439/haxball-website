@@ -131,28 +131,36 @@ function step() {
     io.emit('k', p.id);
   }
 
-  const act = [];
-  players.forEach(p => {
-    if (!p.t) return;
-    act.push(p);
-    let ix = (p.in & 8 ? 1 : 0) - (p.in & 4 ? 1 : 0);
-    let iy = (p.in & 2 ? 1 : 0) - (p.in & 1 ? 1 : 0);
-    const l = Math.hypot(ix, iy);
-    if (l) { ix /= l; iy /= l; }
-    const a = p.in & 16 ? 0.09 : 0.14;    // şut tuşuna basılıyken ivme düşer
-    p.vx += ix * a; p.vy += iy * a;
+  function step() {
+   const act = [];
+    players.forEach(p => {
+      if (!p.t) return;
+      act.push(p);
+      let ix = (p.in & 8 ? 1 : 0) - (p.in & 4 ? 1 : 0);
+      let iy = (p.in & 2 ? 1 : 0) - (p.in & 1 ? 1 : 0);
+      const l = Math.hypot(ix, iy);
+     if (l) { ix /= l; iy /= l; }
+     const a = p.in & 16 ? 0.12 : 0.18; // Şut tuşu ve normal ivme
+      p.vx += ix * a; p.vy += iy * a;
   });
 
-  [ball, ...act].forEach(d => { d.x += d.vx; d.y += d.vy; d.vx *= d.d; d.vy *= d.d; });
+  // HATALI KISIM (d tanımlı değil):
+  [ball, ...act].forEach(obj => {
+    obj.x += obj.vx; 
+    obj.y += obj.vy; 
+    obj.vx *= (obj.d || 0.96); 
+    obj.vy *= (obj.d || 0.96);
+  });
 
   act.forEach(p => {
     if (p.in & 16) {
       if (!p.lock) {
-        const dx = ball.x - p.x, dy = ball.y - p.y, d = Math.hypot(dx, dy);
-        if (d > 0 && d < PR + BR + KICK_RANGE) {
-          ball.vx += dx / d * KICK; ball.vy += dy / d * KICK;
+        const dx = ball.x - p.x, dy = ball.y - p.y, dist = Math.hypot(dx, dy);
+        if (dist > 0 && dist < PR + BR + KICK_RANGE) {
+          ball.vx += (dx / dist) * KICK; 
+          ball.vy += (dy / dist) * KICK;
           p.lock = true;
-          ball.lastTouch = p.n; // Şut atan oyuncuyu kaydet
+          ball.lastTouch = p.n; // Golü atanı kaydet
           io.emit('k', p.id);
         }
       }
@@ -174,14 +182,16 @@ function step() {
     if (ph === 0) {
       const g = ball.x < 0 ? 2 : ball.x > W ? 1 : 0;
       if (g) {
-        sc[g - 1]++; winner = g;
-        scorer = ball.lastTouch || ''; // Gol atanın ismini al
+        sc[g - 1]++; 
+        winner = g;
+        scorer = ball.lastTouch || '';
         if (ot || sc[g - 1] >= LIMIT) endMatch(); else { ph = 1; pt = 150; }
       }
     }
   } else if (--pt <= 0) {
     if (ph === 2) { sc = [0, 0]; tl = MATCH_TICKS; ot = false; }
-    ph = 0; kickoff();
+    ph = 0; 
+    kickoff();
   }
 }
 
