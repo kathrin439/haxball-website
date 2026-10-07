@@ -335,4 +335,48 @@
       };
     });
   });
+  // ---------- Admin Duyuru Gönderme ----------
+  $('adm-ann-btn').onclick = () => {
+    const msg = $('adm-ann-text').value;
+    if (msg) {
+      sock.emit('admin_cmd', { type: 'announce', msg });
+      $('adm-ann-text').value = '';
+    }
+  };
+
+  // Duyuru Alındığında Ekranda Gösterme
+  sock.on('announcement', msg => {
+    const b = $('banner');
+    b.innerHTML = '<div>DUYURU</div><small></small>';
+    b.firstChild.textContent = 'DUYURU';
+    b.firstChild.style.color = '#ffe14d';
+    b.lastChild.textContent = msg;
+    b.className = 'show';
+
+    // 4 saniye sonra duyuruyu ekrandan kaldır
+    setTimeout(() => {
+      if (b.firstChild && b.firstChild.textContent === 'DUYURU') {
+        b.className = '';
+      }
+    }, 4000);
+  });
+
+  // Kadro listesinden kick butonuna basıldığında oyuncunun sayısal ID'sini iletme
+  sock.on('r', a => {
+    if (!isAdmin) return;
+    const ul = $('admin-player-list');
+    ul.innerHTML = '';
+    a.forEach(([id, name]) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${name}</span> <button class="kick-btn" data-id="${id}">At</button>`;
+      ul.appendChild(li);
+    });
+
+    document.querySelectorAll('.kick-btn').forEach(btn => {
+      btn.onclick = (e) => {
+        const targetId = e.target.getAttribute('data-id');
+        sock.emit('admin_cmd', { type: 'kick', targetId });
+      };
+    });
+  });
 })();

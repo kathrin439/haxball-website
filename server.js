@@ -190,7 +190,7 @@ io.on('connection', socket => {
     }
   });
 
-  // Admin Komutları (Sadece doğrulanan adminler çalıştırabilir)
+  // Admin Komutları
   socket.on('admin_cmd', data => {
     if (!socket.isAdmin) return;
 
@@ -202,8 +202,24 @@ io.on('connection', socket => {
     } else if (data.type === 'reset_time') {
       tl = MATCH_TICKS;
     } else if (data.type === 'kick') {
-      const targetSocket = io.sockets.sockets.get(data.targetId);
-      if (targetSocket) targetSocket.disconnect(true);
+      // Oyuncuyu socket.id üzerinden veya sayısal p.id üzerinden bulup kovarız
+      for (const [sockId, p] of players.entries()) {
+        if (p.id === Number(data.targetId) || sockId === data.targetId) {
+          const targetSocket = io.sockets.sockets.get(sockId);
+          if (targetSocket) {
+            targetSocket.disconnect(true); // Bağlantıyı kes
+          }
+          players.delete(sockId); // Listeden temizle
+          rebalance();
+          roster();
+          break;
+        }
+      }
+    } else if (data.type === 'announce') {
+      // Admin duyurusunu tüm oyunculara yayınlarız
+      if (data.msg && data.msg.trim()) {
+        io.emit('announcement', data.msg.trim());
+      }
     }
   });
   const p = {
