@@ -1,48 +1,40 @@
 'use strict';
-require('dotenv').config(); // <-- EN ÜSTE BU SATIRI EKLEYİN
+require('dotenv').config();
+
 const path = require('path');
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
-
-// Admin şifresini doğrudan koda yazmak yerine çevre değişkeninden çekiyoruz:
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "varsayilan_gecici_sifre";
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 app.use(express.static(__dirname));
 
-// ---------- Saha ve oyun sabitleri (Huge ölçeğinde 6v6 saha) ----------
-const W = 1600, H = 800;                 // oyun alanı
+// ---------- Admin Şifresi ----------
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+// ---------- Saha ve oyun sabitleri ----------
+const W = 1200, H = 600;                 // oyun alanı
 const GD = 45;                           // kale ağı derinliği
 const GY1 = H / 2 - 110, GY2 = H / 2 + 110; // kale ağzı (220 px)
 const POST = 7;                          // direk yarıçapı
 const PR = 15, BR = 10;                  // oyuncu / top yarıçapı
-const MAX = 10;                           // takım başı oyuncu
+const MAX = 6;                           // takım başı oyuncu
 const LIMIT = 5;                         // gol limiti
 const MATCH_TICKS = 5 * 60 * 60;         // 5 dakika (60 tick/sn)
 const STEP = 1000 / 60;
 const KICK = 7, KICK_RANGE = 6, E = 0.5; // şut gücü, şut menzili, sekme katsayısı
 const POSTS = [[0, GY1], [0, GY2], [W, GY1], [W, GY2]];
-// 10 oyuncu için X ve Y offset dizilimleri (1200x600 saha ölçeğine uygun):
-const SX = [
-  W / 2 - 100, W / 2 - 200, W / 2 - 200, 
-  W / 2 - 320, W / 2 - 320, W / 2 - 320, 
-  W / 2 - 420, W / 2 - 420, W / 2 - 420, 100
-];
-const SY = [
-  H / 2,       H / 2 - 120, H / 2 + 120, 
-  H / 2 - 180, H / 2,       H / 2 + 180, 
-  H / 2 - 220, H / 2,       H / 2 + 220, H / 2
-];
+const SX = [W / 2 - 110, W / 2 - 210, W / 2 - 210, W / 2 - 330, W / 2 - 330, 110];
+const SY = [H / 2, H / 2 - 110, H / 2 + 110, H / 2 - 200, H / 2 + 200, H / 2];
 
 // ---------- Oyun durumu ----------
 const players = new Map();
 const ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, im: 1, d: 0.99, lastTouch: null };
 let nid = 0, ord = 0, cnt = [0, 0, 0];
 let sc = [0, 0], tl = MATCH_TICKS, ot = false;
-let ph = 0, pt = 0, winner = 0, scorer = '';        // ph: 0 oyun, 1 gol, 2 maç sonu
+let ph = 0, pt = 0, winner = 0, scorer = '';
 
 const list = t => [...players.values()].filter(p => p.t === t).sort((a, b) => a.ord - b.ord);
 
@@ -67,7 +59,6 @@ function roster() {
 
 function move(p, t) { p.t = t; slot(p); }
 
-// Boş yer varsa izleyiciyi sıraya göre takıma al, takımlar arası farkı 1'e indir
 function rebalance() {
   for (let guard = 0; guard < 40; guard++) {
     const r = list(1).length, b = list(2).length;
@@ -106,7 +97,6 @@ function collide(a, b) {
   const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy), min = a.r + b.r;
   if (dist >= min || dist === 0) return;
 
-  // Eğer çarpışan nesnelerden biri oyuncu (a.n var) ve diğeri top ise son dokunanı kaydet
   if (a.n && b === ball) ball.lastTouch = a.n;
 
   const nx = dx / dist, ny = dy / dist, im = a.im + b.im, o = min - dist;
@@ -123,33 +113,23 @@ function collide(a, b) {
 function endMatch() { ph = 2; pt = 420; winner = sc[0] > sc[1] ? 1 : 2; }
 
 function step() {
-  // step() fonksiyonu içerisinde oyuncu şut attığında:
-  if (d > 0 && d < PR + BR + KICK_RANGE) {
-    ball.vx += dx / d * KICK; ball.vy += dy / d * KICK;
-    p.lock = true;
-     ball.lastTouch = p.n; // <-- TOPA SON VURAN OYUNCUNUN İSMİNİ KAYDET
-    io.emit('k', p.id);
-  }
-
-  function step() {
-   const act = [];
-    players.forEach(p => {
-      if (!p.t) return;
-      act.push(p);
-      let ix = (p.in & 8 ? 1 : 0) - (p.in & 4 ? 1 : 0);
-      let iy = (p.in & 2 ? 1 : 0) - (p.in & 1 ? 1 : 0);
-      const l = Math.hypot(ix, iy);
-     if (l) { ix /= l; iy /= l; }
-     const a = p.in & 16 ? 0.12 : 0.18; // Şut tuşu ve normal ivme
-      p.vx += ix * a; p.vy += iy * a;
+  const act = [];
+  players.forEach(p => {
+    if (!p.t) return;
+    act.push(p);
+    let ix = (p.in & 8 ? 1 : 0) - (p.in & 4 ? 1 : 0);
+    let iy = (p.in & 2 ? 1 : 0) - (p.in & 1 ? 1 : 0);
+    const l = Math.hypot(ix, iy);
+    if (l) { ix /= l; iy /= l; }
+    const a = p.in & 16 ? 0.12 : 0.18;
+    p.vx += ix * a; p.vy += iy * a;
   });
 
-  // HATALI KISIM (d tanımlı değil):
   [ball, ...act].forEach(obj => {
-    obj.x += obj.vx; 
-    obj.y += obj.vy; 
-    obj.vx *= (obj.d || 0.96); 
-    obj.vy *= (obj.d || 0.96);
+    obj.x += obj.vx;
+    obj.y += obj.vy;
+    obj.vx *= (obj.d !== undefined ? obj.d : 0.96);
+    obj.vy *= (obj.d !== undefined ? obj.d : 0.96);
   });
 
   act.forEach(p => {
@@ -157,10 +137,10 @@ function step() {
       if (!p.lock) {
         const dx = ball.x - p.x, dy = ball.y - p.y, dist = Math.hypot(dx, dy);
         if (dist > 0 && dist < PR + BR + KICK_RANGE) {
-          ball.vx += (dx / dist) * KICK; 
+          ball.vx += (dx / dist) * KICK;
           ball.vy += (dy / dist) * KICK;
           p.lock = true;
-          ball.lastTouch = p.n; // Golü atanı kaydet
+          ball.lastTouch = p.n;
           io.emit('k', p.id);
         }
       }
@@ -174,7 +154,7 @@ function step() {
   act.forEach(bounds);
   bounds(ball);
 
- if (ph === 0) {
+  if (ph === 0) {
     if (!ot && --tl <= 0) {
       tl = 0;
       if (sc[0] !== sc[1]) endMatch(); else ot = true;
@@ -182,7 +162,7 @@ function step() {
     if (ph === 0) {
       const g = ball.x < 0 ? 2 : ball.x > W ? 1 : 0;
       if (g) {
-        sc[g - 1]++; 
+        sc[g - 1]++;
         winner = g;
         scorer = ball.lastTouch || '';
         if (ot || sc[g - 1] >= LIMIT) endMatch(); else { ph = 1; pt = 150; }
@@ -190,11 +170,10 @@ function step() {
     }
   } else if (--pt <= 0) {
     if (ph === 2) { sc = [0, 0]; tl = MATCH_TICKS; ot = false; }
-    ph = 0; 
+    ph = 0;
     kickoff();
   }
 }
-
 
 const r1 = v => Math.round(v * 10) / 10;
 function snapshot() {
@@ -214,7 +193,6 @@ setInterval(() => {
 
 // ---------- Bağlantılar ----------
 io.on('connection', socket => {
-  // Admin Giriş İsteği
   socket.on('admin_login', pass => {
     if (pass === ADMIN_PASSWORD) {
       socket.isAdmin = true;
@@ -224,8 +202,6 @@ io.on('connection', socket => {
     }
   });
 
-  // Admin Komutları
-  // Admin Komutları
   socket.on('admin_cmd', data => {
     if (!socket.isAdmin) return;
 
@@ -237,26 +213,25 @@ io.on('connection', socket => {
     } else if (data.type === 'reset_time') {
       tl = MATCH_TICKS;
     } else if (data.type === 'kick') {
-      // Oyuncuyu socket.id üzerinden veya sayısal p.id üzerinden bulup kovarız
       for (const [sockId, p] of players.entries()) {
         if (p.id === Number(data.targetId) || sockId === data.targetId) {
           const targetSocket = io.sockets.sockets.get(sockId);
           if (targetSocket) {
-            targetSocket.disconnect(true); // Bağlantıyı kes
+            targetSocket.disconnect(true);
           }
-          players.delete(sockId); // Listeden temizle
+          players.delete(sockId);
           rebalance();
           roster();
           break;
         }
       }
     } else if (data.type === 'announce') {
-      // Admin duyurusunu tüm oyunculara yayınlarız
       if (data.msg && data.msg.trim()) {
         io.emit('announcement', data.msg.trim());
       }
     }
   });
+
   const p = {
     id: ++nid, n: 'Oyuncu' + (1000 + Math.floor(Math.random() * 9000)), t: 0, ord: ++ord,
     x: 0, y: 0, vx: 0, vy: 0, r: PR, im: 0.5, d: 0.96, in: 0, lock: false
