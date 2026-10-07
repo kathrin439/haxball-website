@@ -105,22 +105,26 @@
     $('tm').textContent = d.ot ? '00:00' : String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
     $('sub').textContent = d.ot ? 'ALTIN GOL' : 'İLK ' + (cfg ? cfg.LIMIT : 5) + ' GOL';
 
-    const key = d.ph ? d.ph + '-' + d.w + '-' + d.s.join(':') : '';
-    // game.js - sock.on('s', d => { ... }) içerisinde bannerKey kontrolü:
-    if (key !== bannerKey) {
-      bannerKey = key;
-      const b = $('banner');
-      if (!d.ph) b.className = '';
-      else {
-        if (d.ph === 1) playGoalSound(); // <-- GOL OLDUĞUNDA SESİ ÇAL
+    const key = d.ph ? d.ph + '-' + d.w + '-' + d.s.join(':') + '-' + (d.sc_name || '') : '';
+  if (key !== bannerKey) {
+    bannerKey = key;
+    const b = $('banner');
+    if (!d.ph) b.className = '';
+    else {
+      if (d.ph === 1) playGoalSound();
 
-        const t = d.ph === 1 ? 'GOL!' : 'MAÇ BİTTİ';
-        const s = d.ph === 1 ? TN[d.w] + ' TAKIM SKORU BULDU' : TN[d.w] + ' TAKIM KAZANDI';
-       b.innerHTML = '<div></div><small></small>';
-       b.firstChild.textContent = t;
-       b.lastChild.textContent = s;
-       b.firstChild.style.color = COL[d.w];
-       b.className = 'show';
+      // Gol atan kişinin ismi varsa ekliyoruz
+      const scorerText = d.sc_name ? ' (' + d.sc_name + ')' : '';
+      const t = d.ph === 1 ? 'GOL!' + scorerText : 'MAÇ BİTTİ';
+      const s = d.ph === 1 ? TN[d.w] + ' TAKIM SKORU BULDU' : TN[d.w] + ' TAKIM KAZANDI';
+      
+      b.innerHTML = '<div></div><small></small>';
+      b.firstChild.textContent = t;
+      b.lastChild.textContent = s;
+      b.firstChild.style.color = COL[d.w];
+      b.className = 'show';
+    }
+  }
   }
 }
   });

@@ -39,10 +39,10 @@ const SY = [
 
 // ---------- Oyun durumu ----------
 const players = new Map();
-const ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, im: 1, d: 0.99 };
+const ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, im: 1, d: 0.99 lastTouch: null };
 let nid = 0, ord = 0, cnt = [0, 0, 0];
 let sc = [0, 0], tl = MATCH_TICKS, ot = false;
-let ph = 0, pt = 0, winner = 0;          // ph: 0 oyun, 1 gol, 2 maç sonu
+let ph = 0, pt = 0, winner = 0, scorer = '';        // ph: 0 oyun, 1 gol, 2 maç sonu
 
 const list = t => [...players.values()].filter(p => p.t === t).sort((a, b) => a.ord - b.ord);
 
@@ -55,7 +55,7 @@ function slot(p) {
 }
 
 function kickoff() {
-  ball.x = W / 2; ball.y = H / 2; ball.vx = ball.vy = 0;
+  ball.x = W / 2; ball.y = H / 2; ball.vx = ball.vy = 0; ball.lastTouch = null;
   players.forEach(p => { if (p.t) slot(p); });
 }
 
@@ -105,6 +105,10 @@ function bounds(d) {
 function collide(a, b) {
   const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy), min = a.r + b.r;
   if (dist >= min || dist === 0) return;
+
+  // Eğer oyuncu topa temas ettiyse son dokunanı kaydet
+  if (a.n && b === ball) ball.lastTouch = a.n;
+
   const nx = dx / dist, ny = dy / dist, im = a.im + b.im, o = min - dist;
   a.x -= nx * o * a.im / im; a.y -= ny * o * a.im / im;
   b.x += nx * o * b.im / im; b.y += ny * o * b.im / im;
@@ -119,6 +123,14 @@ function collide(a, b) {
 function endMatch() { ph = 2; pt = 420; winner = sc[0] > sc[1] ? 1 : 2; }
 
 function step() {
+  // step() fonksiyonu içerisinde oyuncu şut attığında:
+  if (d > 0 && d < PR + BR + KICK_RANGE) {
+    ball.vx += dx / d * KICK; ball.vy += dy / d * KICK;
+    p.lock = true;
+     ball.lastTouch = p.n; // <-- TOPA SON VURAN OYUNCUNUN İSMİNİ KAYDET
+    io.emit('k', p.id);
+  }
+
   const act = [];
   players.forEach(p => {
     if (!p.t) return;
@@ -154,28 +166,20 @@ function step() {
   bounds(ball);
 
   if (ph === 0) {
-    if (!ot && cnt[1] && cnt[2] && --tl <= 0) {
-      tl = 0;
-      if (sc[0] !== sc[1]) endMatch(); else ot = true;
-    }
-    if (ph === 0) {
-      const g = ball.x < 0 ? 2 : ball.x > W ? 1 : 0;
-      if (g) {
-        sc[g - 1]++; winner = g;
-        if (ot || sc[g - 1] >= LIMIT) endMatch(); else { ph = 1; pt = 150; }
-      }
-    }
-  } else if (--pt <= 0) {
-    if (ph === 2) { sc = [0, 0]; tl = MATCH_TICKS; ot = false; }
-    ph = 0; kickoff();
+  const g = ball.x < 0 ? 2 : ball.x > W ? 1 : 0;
+  if (g) {
+    sc[g - 1]++; winner = g;
+    scorer = ball.lastTouch || ''; // Golü atanın ismini al
+    if (ot || sc[g - 1] >= LIMIT) endMatch(); else { ph = 1; pt = 150; }
   }
+}
 }
 
 const r1 = v => Math.round(v * 10) / 10;
 function snapshot() {
   const p = [];
   players.forEach(q => { if (q.t) p.push([q.id, r1(q.x), r1(q.y), q.in & 16 ? 1 : 0]); });
-  io.volatile.emit('s', { p, b: [r1(ball.x), r1(ball.y)], s: sc, t: Math.ceil(tl / 60), ph, w: winner, ot });
+  io.volatile.emit('s', { p, b: [r1(ball.x), r1(ball.y)], s: sc, t: Math.ceil(tl / 60), ph, w: winner, ot, sc_name: scorer });
 }
 
 let last = Date.now(), acc = 0;
