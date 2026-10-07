@@ -1,9 +1,12 @@
 'use strict';
+require('dotenv').config(); // <-- EN ÜSTE BU SATIRI EKLEYİN
 const path = require('path');
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
-const ADMIN_PASSWORD = "4942894y"; // <-- İstediğin admin şifresini buraya yaz
+
+// Admin şifresini doğrudan koda yazmak yerine çevre değişkeninden çekiyoruz:
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "varsayilan_gecici_sifre";
 
 const app = express();
 const server = http.createServer(app);
