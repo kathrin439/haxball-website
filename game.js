@@ -1,5 +1,18 @@
 (() => {
   'use strict';
+  // Tarayıcı sekmesine özel benzersiz bir ID oluştur veya mevcut olanı al
+  let tabToken = sessionStorage.getItem('haxball_tab_token');
+  if (!tabToken) {
+    tabToken = 'token_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+    sessionStorage.setItem('haxball_tab_token', tabToken);
+  }
+
+  // Sunucuya bağlanırken bu token'ı gönder
+  const socket = io({
+    query: {
+      token: tabToken
+    }
+  });
   const $ = id => document.getElementById(id);
   const cv = $('c'), ctx = cv.getContext('2d'), sock = io();
   const COL = { 1: '#ff4d4d', 2: '#3d8bff' }, TN = { 1: 'KIRMIZI', 2: 'MAVİ' };

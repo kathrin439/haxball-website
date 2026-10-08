@@ -14,9 +14,8 @@ app.use(express.static(__dirname));
 // ---------- Admin Şifresi ----------
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
-// ---------- IP Sınırlaması (Çoklu Sekme Engelleme) ----------
-const connectedIPs = new Map();
-const MAX_CONNECTIONS_PER_IP = 1; // IP başına izin verilen maksimum sekme sayısı
+// ---------- Sekme Bazlı Çoklu Açılış Engelleme ----------
+const activeSessions = new Set();
 
 // ---------- Saha ve oyun sabitleri ----------
 const W = 1500, H = 750;                 // oyun alanı
@@ -28,7 +27,7 @@ const MAX = 10;                          // takım başı oyuncu
 const LIMIT = 5;                         // gol limiti
 const MATCH_TICKS = 5 * 60 * 60;         // 5 dakika (60 tick/sn)
 const STEP = 1000 / 60;
-const KICK = 8.5, KICK_RANGE = 10, E = 0.5; // şut gücü, genişletilmiş şut menzili, sekme katsayısı
+const KICK = 10.5, KICK_RANGE = 10, E = 0.5; // şut gücü, genişletilmiş şut menzili, sekme katsayısı
 const POSTS = [[0, GY1], [0, GY2], [W, GY1], [W, GY2]];
 const SX = [
   W / 2 - 100, W / 2 - 200, W / 2 - 200, 
@@ -44,9 +43,9 @@ const SY = [
 // OYUNCU FİZİK AYARLARI
 const PLAYER_CONFIG = {
   radius: 22.5,          // Oyuncu diskinin yarıçapı
-  acceleration: 0.45,  // Tuşa basıldığında hızlanma oranı
+  acceleration: 0.22,  // Tuşa basıldığında hızlanma oranı
   damping: 0.88,       // SÜRTÜNME (0.88 = Buzda kaymayı engeller, tok tutar)
-  maxSpeed: 8.5        // Maksimum hız sınırı
+  maxSpeed: 8.1        // Maksimum hız sınırı
 };
 
 // ---------- Oyun durumu ----------
@@ -156,7 +155,6 @@ function step() {
     if (p.in & 16) {
       if (!p.lock) {
         const dx = ball.x - p.x, dy = ball.y - p.y, dist = Math.hypot(dx, dy);
-        // Genişletilmiş vuruş alanı kontrolü (PR + BR + KICK_RANGE)
         if (dist > 0 && dist <= PR + BR + KICK_RANGE) {
           const angle = Math.atan2(dy, dx);
           ball.vx += Math.cos(angle) * KICK;
@@ -215,16 +213,18 @@ setInterval(() => {
 
 // ---------- Bağlantılar ----------
 io.on('connection', socket => {
-  // IP Kontrolü (Çoklu sekme engelleme)
-  const clientIP = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-  const currentCount = connectedIPs.get(clientIP) || 0;
+  // Sekme bazlı token kontrolü
+  const clientToken = socket.handshake.query.token;
 
-  if (currentCount >= MAX_CONNECTIONS_PER_IP) {
-    socket.emit('announcement', 'Aynı bilgisayardan birden fazla sekme açamazsın!');
-    socket.disconnect(true);
-    return;
+  if (clientToken) {
+    if (activeSessions.has(clientToken)) {
+      socket.emit('announcement', 'Bu tarayıcıda zaten açık bir sekme var!');
+      socket.disconnect(true);
+      return;
+    }
+    activeSessions.add(clientToken);
+    socket.clientToken = clientToken;
   }
-  connectedIPs.set(clientIP, currentCount + 1);
 
   socket.on('admin_login', pass => {
     if (pass === ADMIN_PASSWORD) {
@@ -282,14 +282,9 @@ io.on('connection', socket => {
   });
 
   socket.on('disconnect', () => {
-    // IP sayacını düşür
-    const count = connectedIPs.get(clientIP) || 1;
-    if (count <= 1) {
-      connectedIPs.delete(clientIP);
-    } else {
-      connectedIPs.set(clientIP, count - 1);
+    if (socket.clientToken) {
+      activeSessions.delete(socket.clientToken);
     }
-
     players.delete(socket.id);
     rebalance();
     roster();
