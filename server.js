@@ -24,7 +24,7 @@ const MAX = 10;                           // takım başı oyuncu
 const LIMIT = 5;                         // gol limiti
 const MATCH_TICKS = 5 * 60 * 60;         // 5 dakika (60 tick/sn)
 const STEP = 1000 / 60;
-const KICK = 7, KICK_RANGE = 6, E = 0.5; // şut gücü, şut menzili, sekme katsayısı
+const KICK = 7, KICK_RANGE = 8, E = 0.5; // şut gücü, şut menzili, sekme katsayısı
 const POSTS = [[0, GY1], [0, GY2], [W, GY1], [W, GY2]];
 const SX = [
   W / 2 - 100, W / 2 - 200, W / 2 - 200, 
@@ -36,6 +36,19 @@ const SY = [
   H / 2 - 180, H / 2,       H / 2 + 180, 
   H / 2 - 220, H / 2,       H / 2 + 220, H / 2
 ];
+// OYUNCU FİZİK AYARLARI (server.js veya game.js)
+const PLAYER_CONFIG = {
+  radius: 15,          // Oyuncu diskinin yarıçapı
+  acceleration: 0.15,  // Tuşa basıldığında hızlanma oranı (varsayılan çok yüksekse düşürün, örn: 0.12 - 0.20)
+  damping: 0.88,       // SÜRTÜNME / YAVAŞLAMA DEĞERİ! (Bunu yükseltin)
+  maxSpeed: 6.0        // Maksimum hız sınırı
+};
+
+// Her karede (tick) oyuncu pozisyonu güncellenirken:
+// Damping (sürtünme) değeri 1'e ne kadar yakın olursa oyuncu O KADAR ÇOK KAYAR.
+// Damping değerini düşürürseniz (örn: 0.96 yerine 0.88 veya 0.85) oyuncu tuşu bıraktığı an daha çabuk durur.
+player.vx *= PLAYER_CONFIG.damping;
+player.vy *= PLAYER_CONFIG.damping;
 
 // ---------- Oyun durumu ----------
 const players = new Map();
@@ -66,6 +79,28 @@ function roster() {
 }
 
 function move(p, t) { p.t = t; slot(p); }
+
+function handleKick(player, ball) {
+  // Oyuncu diski ile Top diski arasındaki merkez mesafesi
+  const dx = ball.x - player.x;
+  const dy = ball.y - player.y;
+  const distance = Math.hypot(dx, dy);
+
+  // ŞUT ALANI HESABI:
+  // Oyuncu yarıçapı + Top yarıçapı + KICK_RANGE
+  // Eğer KICK_RANGE küçükse (örn: 2-3px) topa basmak çok zorlaşır.
+  const minKickDistance = player.radius + ball.radius + KICK_RANGE;
+
+  if (distance <= minKickDistance) {
+    // Vuruş yönü hesabı (Oyuncudan topa doğru Vector)
+    const angle = Math.atan2(dy, dx);
+    const kickForce = 8.5; // Şut gücü
+
+    // Topa kuvvet uygula
+    ball.vx += Math.cos(angle) * kickForce;
+    ball.vy += Math.sin(angle) * kickForce;
+  }
+}
 
 function rebalance() {
   for (let guard = 0; guard < 40; guard++) {
