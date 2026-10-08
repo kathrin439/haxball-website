@@ -14,17 +14,21 @@ app.use(express.static(__dirname));
 // ---------- Admin Şifresi ----------
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
+// ---------- IP Sınırlaması (Çoklu Sekme Engelleme) ----------
+const connectedIPs = new Map();
+const MAX_CONNECTIONS_PER_IP = 1; // IP başına izin verilen maksimum sekme sayısı
+
 // ---------- Saha ve oyun sabitleri ----------
 const W = 1500, H = 750;                 // oyun alanı
 const GD = 45;                           // kale ağı derinliği
 const GY1 = H / 2 - 110, GY2 = H / 2 + 110; // kale ağzı (220 px)
 const POST = 7;                          // direk yarıçapı
 const PR = 15, BR = 10;                  // oyuncu / top yarıçapı
-const MAX = 10;                           // takım başı oyuncu
+const MAX = 10;                          // takım başı oyuncu
 const LIMIT = 5;                         // gol limiti
 const MATCH_TICKS = 5 * 60 * 60;         // 5 dakika (60 tick/sn)
 const STEP = 1000 / 60;
-const KICK = 7, KICK_RANGE = 8, E = 0.5; // şut gücü, şut menzili, sekme katsayısı
+const KICK = 8.5, KICK_RANGE = 10, E = 0.5; // şut gücü, genişletilmiş şut menzili, sekme katsayısı
 const POSTS = [[0, GY1], [0, GY2], [W, GY1], [W, GY2]];
 const SX = [
   W / 2 - 100, W / 2 - 200, W / 2 - 200, 
@@ -36,23 +40,18 @@ const SY = [
   H / 2 - 180, H / 2,       H / 2 + 180, 
   H / 2 - 220, H / 2,       H / 2 + 220, H / 2
 ];
-// OYUNCU FİZİK AYARLARI (server.js veya game.js)
+
+// OYUNCU FİZİK AYARLARI
 const PLAYER_CONFIG = {
   radius: 15,          // Oyuncu diskinin yarıçapı
-  acceleration: 0.15,  // Tuşa basıldığında hızlanma oranı (varsayılan çok yüksekse düşürün, örn: 0.12 - 0.20)
-  damping: 0.88,       // SÜRTÜNME / YAVAŞLAMA DEĞERİ! (Bunu yükseltin)
+  acceleration: 0.15,  // Tuşa basıldığında hızlanma oranı
+  damping: 0.88,       // SÜRTÜNME (0.88 = Buzda kaymayı engeller, tok tutar)
   maxSpeed: 6.0        // Maksimum hız sınırı
 };
 
-// Her karede (tick) oyuncu pozisyonu güncellenirken:
-// Damping (sürtünme) değeri 1'e ne kadar yakın olursa oyuncu O KADAR ÇOK KAYAR.
-// Damping değerini düşürürseniz (örn: 0.96 yerine 0.88 veya 0.85) oyuncu tuşu bıraktığı an daha çabuk durur.
-player.vx *= PLAYER_CONFIG.damping;
-player.vy *= PLAYER_CONFIG.damping;
-
 // ---------- Oyun durumu ----------
 const players = new Map();
-const ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, im: 1, d: 0.99, lastTouch: null };
+const ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, r: BR, im: 1, d: 0.98, lastTouch: null };
 let nid = 0, ord = 0, cnt = [0, 0, 0];
 let sc = [0, 0], tl = MATCH_TICKS, ot = false;
 let ph = 0, pt = 0, winner = 0, scorer = '';
@@ -79,28 +78,6 @@ function roster() {
 }
 
 function move(p, t) { p.t = t; slot(p); }
-
-function handleKick(player, ball) {
-  // Oyuncu diski ile Top diski arasındaki merkez mesafesi
-  const dx = ball.x - player.x;
-  const dy = ball.y - player.y;
-  const distance = Math.hypot(dx, dy);
-
-  // ŞUT ALANI HESABI:
-  // Oyuncu yarıçapı + Top yarıçapı + KICK_RANGE
-  // Eğer KICK_RANGE küçükse (örn: 2-3px) topa basmak çok zorlaşır.
-  const minKickDistance = player.radius + ball.radius + KICK_RANGE;
-
-  if (distance <= minKickDistance) {
-    // Vuruş yönü hesabı (Oyuncudan topa doğru Vector)
-    const angle = Math.atan2(dy, dx);
-    const kickForce = 8.5; // Şut gücü
-
-    // Topa kuvvet uygula
-    ball.vx += Math.cos(angle) * kickForce;
-    ball.vy += Math.sin(angle) * kickForce;
-  }
-}
 
 function rebalance() {
   for (let guard = 0; guard < 40; guard++) {
@@ -164,24 +141,26 @@ function step() {
     let iy = (p.in & 2 ? 1 : 0) - (p.in & 1 ? 1 : 0);
     const l = Math.hypot(ix, iy);
     if (l) { ix /= l; iy /= l; }
-    const a = p.in & 16 ? 0.12 : 0.18;
+    const a = PLAYER_CONFIG.acceleration;
     p.vx += ix * a; p.vy += iy * a;
   });
 
   [ball, ...act].forEach(obj => {
     obj.x += obj.vx;
     obj.y += obj.vy;
-    obj.vx *= (obj.d !== undefined ? obj.d : 0.96);
-    obj.vy *= (obj.d !== undefined ? obj.d : 0.96);
+    obj.vx *= (obj.d !== undefined ? obj.d : PLAYER_CONFIG.damping);
+    obj.vy *= (obj.d !== undefined ? obj.d : PLAYER_CONFIG.damping);
   });
 
   act.forEach(p => {
     if (p.in & 16) {
       if (!p.lock) {
         const dx = ball.x - p.x, dy = ball.y - p.y, dist = Math.hypot(dx, dy);
-        if (dist > 0 && dist < PR + BR + KICK_RANGE) {
-          ball.vx += (dx / dist) * KICK;
-          ball.vy += (dy / dist) * KICK;
+        // Genişletilmiş vuruş alanı kontrolü (PR + BR + KICK_RANGE)
+        if (dist > 0 && dist <= PR + BR + KICK_RANGE) {
+          const angle = Math.atan2(dy, dx);
+          ball.vx += Math.cos(angle) * KICK;
+          ball.vy += Math.sin(angle) * KICK;
           p.lock = true;
           ball.lastTouch = p.n;
           io.emit('k', p.id);
@@ -236,6 +215,17 @@ setInterval(() => {
 
 // ---------- Bağlantılar ----------
 io.on('connection', socket => {
+  // IP Kontrolü (Çoklu sekme engelleme)
+  const clientIP = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+  const currentCount = connectedIPs.get(clientIP) || 0;
+
+  if (currentCount >= MAX_CONNECTIONS_PER_IP) {
+    socket.emit('announcement', 'Aynı bilgisayardan birden fazla sekme açamazsın!');
+    socket.disconnect(true);
+    return;
+  }
+  connectedIPs.set(clientIP, currentCount + 1);
+
   socket.on('admin_login', pass => {
     if (pass === ADMIN_PASSWORD) {
       socket.isAdmin = true;
@@ -277,7 +267,7 @@ io.on('connection', socket => {
 
   const p = {
     id: ++nid, n: 'Oyuncu' + (1000 + Math.floor(Math.random() * 9000)), t: 0, ord: ++ord,
-    x: 0, y: 0, vx: 0, vy: 0, r: PR, im: 0.5, d: 0.96, in: 0, lock: false
+    x: 0, y: 0, vx: 0, vy: 0, r: PR, im: 0.5, d: PLAYER_CONFIG.damping, in: 0, lock: false
   };
   players.set(socket.id, p);
   socket.emit('init', { id: p.id, W, H, GD, GY1, GY2, POST, PR, BR, LIMIT });
@@ -290,7 +280,16 @@ io.on('connection', socket => {
     n = n.replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 14);
     if (n) { p.n = n; roster(); }
   });
+
   socket.on('disconnect', () => {
+    // IP sayacını düşür
+    const count = connectedIPs.get(clientIP) || 1;
+    if (count <= 1) {
+      connectedIPs.delete(clientIP);
+    } else {
+      connectedIPs.set(clientIP, count - 1);
+    }
+
     players.delete(socket.id);
     rebalance();
     roster();
