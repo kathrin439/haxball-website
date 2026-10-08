@@ -8,10 +8,28 @@
   }
 
   // Sunucuya bağlanırken bu token'ı gönder
-  const socket = io({
-    query: {
-      token: tabToken
-    }
+  // Sayfa tamamen yüklendikten ve gerçek insan etkileşimi/UI hazır olduktan sonra bağlan
+let socket;
+
+window.addEventListener('DOMContentLoaded', () => {
+  let tabToken = sessionStorage.getItem('haxball_tab_token');
+  if (!tabToken) {
+    tabToken = 'token_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+    sessionStorage.setItem('haxball_tab_token', tabToken);
+  }
+
+  // Socket bağlantısını sadece tarayıcı hazır olunca başlat
+  socket = io({
+    query: { token: tabToken },
+    transports: ['websocket'] // Doğrudan hızlı websocket kullan
+  });
+
+  // Sayfa kapanırken veya yenilenirken sunucuya hemen 'ben çıktım' de
+  window.addEventListener('beforeunload', () => {
+    if (socket) socket.disconnect();
+});
+  
+  // Geri kalan socket dinleyicilerini (socket.on('init', ...)) buranın altına alabilirsin.
   });
   const $ = id => document.getElementById(id);
   const cv = $('c'), ctx = cv.getContext('2d'), sock = io();
