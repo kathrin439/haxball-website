@@ -1,38 +1,20 @@
 (() => {
   'use strict';
-  // Tarayıcı sekmesine özel benzersiz bir ID oluştur veya mevcut olanı al
+
+  // ---------- Sekme Bazlı Token Üretimi ----------
   let tabToken = sessionStorage.getItem('haxball_tab_token');
   if (!tabToken) {
     tabToken = 'token_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     sessionStorage.setItem('haxball_tab_token', tabToken);
   }
 
-  // Sunucuya bağlanırken bu token'ı gönder
-  // Sayfa tamamen yüklendikten ve gerçek insan etkileşimi/UI hazır olduktan sonra bağlan
-let socket;
-
-window.addEventListener('DOMContentLoaded', () => {
-  let tabToken = sessionStorage.getItem('haxball_tab_token');
-  if (!tabToken) {
-    tabToken = 'token_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
-    sessionStorage.setItem('haxball_tab_token', tabToken);
-  }
-
-  // Socket bağlantısını sadece tarayıcı hazır olunca başlat
-  socket = io({
-    query: { token: tabToken },
-    transports: ['websocket'] // Doğrudan hızlı websocket kullan
+  // ---------- Socket.io Bağlantısı (Token ile) ----------
+  const sock = io({
+    query: { token: tabToken }
   });
 
-  // Sayfa kapanırken veya yenilenirken sunucuya hemen 'ben çıktım' de
-  window.addEventListener('beforeunload', () => {
-    if (socket) socket.disconnect();
-});
-  
-  // Geri kalan socket dinleyicilerini (socket.on('init', ...)) buranın altına alabilirsin.
-  });
   const $ = id => document.getElementById(id);
-  const cv = $('c'), ctx = cv.getContext('2d'), sock = io();
+  const cv = $('c'), ctx = cv ? cv.getContext('2d') : null;
   const COL = { 1: '#ff4d4d', 2: '#3d8bff' }, TN = { 1: 'KIRMIZI', 2: 'MAVİ' };
   const LINE = 'rgba(234,255,234,.92)', TAU = Math.PI * 2;
   const ls = {
@@ -48,13 +30,41 @@ window.addEventListener('DOMContentLoaded', () => {
 
   if (document.fonts) ['700 13px "Chakra Petch"', '8px "Press Start 2P"'].forEach(f => document.fonts.load(f));
 
+  // ---------- Oyuna Katıl (Join Modal) Mantığı ----------
+  const joinModal = $('joinModal');
+  const joinBtn = $('joinBtn');
+  const joinNickInput = $('joinNickInput');
+
+  if (joinBtn) {
+    joinBtn.onclick = () => {
+      const n = joinNickInput ? joinNickInput.value.trim() : '';
+      sock.emit('join_game', n);
+    };
+  }
+
+  if (joinNickInput) {
+    joinNickInput.addEventListener('keydown', e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        const n = joinNickInput.value.trim();
+        sock.emit('join_game', n);
+      }
+    });
+    joinNickInput.addEventListener('keyup', e => e.stopPropagation());
+  }
+
+  sock.on('joined_success', data => {
+    me = data.id;
+    if (joinModal) joinModal.style.display = 'none';
+  });
+
   // ---------- Ses Efekti Üreteci ----------
   const playGoalSound = () => {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
       const ctxAud = new AudioCtx();
-      const notes = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5
+      const notes = [261.63, 329.63, 392.00, 523.25];
       notes.forEach((freq, i) => {
         const osc = ctxAud.createOscillator();
         const gain = ctxAud.createGain();
@@ -67,22 +77,33 @@ window.addEventListener('DOMContentLoaded', () => {
         osc.start(ctxAud.currentTime + i * 0.1);
         osc.stop(ctxAud.currentTime + i * 0.1 + 0.25);
       });
-    } catch (e) { /* AudioContext kısıtlamalarını yoksay */ }
+    } catch (e) { /* yoksay */ }
   };
 
-  // ---------- Girdi ----------
+  // ---------- Girdi (Kontroller) ----------
   const KEYS = { ArrowUp: 1, KeyW: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 4, KeyA: 4, ArrowRight: 8, KeyD: 8, Space: 16, KeyX: 16 };
   const send = () => {
     const v = kb | (mk ? 16 : 0);
     if (v !== sent) { sent = v; sock.emit('in', v); }
   };
-  addEventListener('keydown', e => { const b = KEYS[e.code]; if (b) { e.preventDefault(); kb |= b; send(); } });
-  addEventListener('keyup', e => { const b = KEYS[e.code]; if (b) { e.preventDefault(); kb &= ~b; send(); } });
+
+  addEventListener('keydown', e => { 
+    if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+    const b = KEYS[e.code]; 
+    if (b) { e.preventDefault(); kb |= b; send(); } 
+  });
+  
+  addEventListener('keyup', e => { 
+    if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+    const b = KEYS[e.code]; 
+    if (b) { e.preventDefault(); kb &= ~b; send(); } 
+  });
+
   addEventListener('mousedown', e => { if (e.button === 0 && e.target !== nick) { mk = true; send(); } });
   addEventListener('mouseup', e => { if (e.button === 0) { mk = false; send(); } });
   addEventListener('blur', () => { kb = 0; mk = false; send(); });
   addEventListener('contextmenu', e => e.preventDefault());
-  
+
   if (nick) {
     nick.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') nick.blur(); });
     nick.addEventListener('keyup', e => e.stopPropagation());
@@ -93,11 +114,14 @@ window.addEventListener('DOMContentLoaded', () => {
     nick.value = ls.get('nick') || '';
   }
 
-  // ---------- Socket ----------
+  // ---------- Socket Dinleyicileri ----------
   sock.on('connect', () => $('off') &&$('off').classList.remove('on'));
   sock.on('disconnect', () => { $('off') &&$('off').classList.add('on'); ents.clear(); });
+  
   sock.on('init', d => {
-    cfg = d; me = d.id; resize();
+    cfg = d; 
+    if (d.id) me = d.id; 
+    resize();
     sent = 0;
     const n = ls.get('nick');
     if (n) sock.emit('nick', n);
@@ -107,6 +131,7 @@ window.addEventListener('DOMContentLoaded', () => {
   sock.on('r', a => {
     roster = new Map(a.map(([id, n, t]) => [id, { n, t }]));
     for (const id of [...ents.keys()]) { const r = roster.get(id); if (!r || !r.t) ents.delete(id); }
+    
     [1, 2].forEach(t => {
       const ul = t === 1 ? $('rl') :$('bl');
       if (!ul) return;
@@ -118,14 +143,15 @@ window.addEventListener('DOMContentLoaded', () => {
         ul.appendChild(li);
       });
     });
+
     const m = roster.get(me), spec = a.filter(r => !r[2]).length, role = $('role');
     if (role) {
       role.textContent = !m ? '' : m.t ? TN[m.t] + ' TAKIMI' : 'İZLEYİCİ MODU' + (spec ? ' (' + spec + ')' : '');
       role.style.color = m && m.t ? COL[m.t] : '#ffe14d';
     }
 
-    // Admin panelindeki oyuncu listesi açıksa tazele
-    if (typeof isAdmin !== 'undefined' && isAdmin) {
+    // Admin Paneli Oyuncu Listesi
+    if (isAdmin) {
       const admUl = $('admin-player-list');
       if (admUl) {
         admUl.innerHTML = '';
@@ -187,7 +213,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ---------- Admin Paneli Tarafı ----------
+  // ---------- Admin Paneli Mantığı ----------
   let isAdmin = false;
   const modal = $('admin-modal');
   const loginSec = $('admin-login-sec');
@@ -268,6 +294,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // ---------- Çizim ve Döngü ----------
   function resize() {
     dpr = window.devicePixelRatio || 1; vw = innerWidth; vh = innerHeight;
+    if (!cv) return;
     cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
     if (!cfg) return;
     const top = 88, bot = 64;
@@ -393,7 +420,7 @@ window.addEventListener('DOMContentLoaded', () => {
   let lt = performance.now();
   function frame(now) {
     const dt = Math.min((now - lt) / 1000, 0.1); lt = now;
-    if (cfg) {
+    if (cfg && ctx) {
       const f = 1 - Math.exp(-dt * 28);
       ents.forEach(e => {
         if (Math.abs(e.tx - e.x) + Math.abs(e.ty - e.y) > 120) { e.x = e.tx; e.y = e.ty; }

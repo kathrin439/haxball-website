@@ -45,7 +45,7 @@ const PLAYER_CONFIG = {
   radius: 22.5,          // Oyuncu diskinin yarıçapı
   acceleration: 0.25,  // Tuşa basıldığında hızlanma oranı
   damping: 0.88,       // SÜRTÜNME (0.88 = Buzda kaymayı engeller, tok tutar)
-  maxSpeed: 13        // Maksimum hız sınırı
+  maxSpeed: 20        // Maksimum hız sınırı
 };
 
 // ---------- Oyun durumu ----------
@@ -213,18 +213,50 @@ setInterval(() => {
 
 // ---------- Bağlantılar ----------
 io.on('connection', socket => {
-  // Sekme bazlı token kontrolü
-  const clientToken = socket.handshake.query.token;
+  let playerRef = null;
 
-  if (clientToken) {
-    if (activeSessions.has(clientToken)) {
-      socket.emit('announcement', 'Bu tarayıcıda zaten açık bir sekme var!');
-      socket.disconnect(true);
-      return;
+  // İstemciye harita bilgilerini gönder
+  socket.emit('init', { W, H, GD, GY1, GY2, POST, PR, BR, LIMIT });
+  roster();
+
+  // YALNIZCA BUTONA BASTIĞINDA OYUNCU OLARAK EKLENİR
+  socket.on('join_game', (nickname) => {
+    if (playerRef) return; // Zaten katıldıysa tekrar ekleme
+
+    let cleanNick = typeof nickname === 'string' ? nickname.replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 14) : '';
+    if (!cleanNick) cleanNick = 'Oyuncu' + (1000 + Math.floor(Math.random() * 9000));
+
+    playerRef = {
+      id: ++nid, 
+      n: cleanNick, 
+      t: 0, 
+      ord: ++ord,
+      x: 0, y: 0, vx: 0, vy: 0, r: PR, im: 0.5, d: PLAYER_CONFIG.damping, in: 0, lock: false
+    };
+
+    players.set(socket.id, playerRef);
+    socket.emit('joined_success', { id: playerRef.id });
+    rebalance();
+    roster();
+  });
+
+  socket.on('in', v => { 
+    if (playerRef) playerRef.in = (Number(v) | 0) & 31; 
+  });
+
+  socket.on('nick', n => {
+    if (!playerRef || typeof n !== 'string') return;
+    n = n.replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 14);
+    if (n) { playerRef.n = n; roster(); }
+  });
+
+  socket.on('disconnect', () => {
+    if (playerRef) {
+      players.delete(socket.id);
+      rebalance();
+      roster();
     }
-    activeSessions.add(clientToken);
-    socket.clientToken = clientToken;
-  }
+  });
 
   socket.on('admin_login', pass => {
     if (pass === ADMIN_PASSWORD) {
